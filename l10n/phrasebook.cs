@@ -16,7 +16,8 @@ namespace 注 {
 internal class SourceLocation {
   public string file;
   public int line;
-  public int column;
+  public int first_column;
+  public int last_column;
 }
 
 internal class Version {
@@ -76,12 +77,12 @@ internal class Version {
                                          frame.Show();
                                          view.SetCaretPos(
                                              location.line - 1,
-                                             location.column - 1);
+                                             location.first_column - 1);
                                          var span = new TextSpan{
                                              iStartLine = location.line - 1,
-                                             iStartIndex = location.column - 1,
+                                             iStartIndex = location.first_column - 1,
                                              iEndLine = location.line - 1,
-                                             iEndIndex = location.column - 1
+                                             iEndIndex = location.last_column - 1
                                          };
                                          view.EnsureSpanVisible(span);
                                          view.CenterLines(location.line - 1, 1);
@@ -175,8 +176,8 @@ internal class Phrasebook {
               value,
               new SourceLocation{
                   file = file, line = located_token.line,
-                  column = located_token.column +
-                           token.LastIndexOf(' ', token.IndexOf('='))
+                  first_column = located_token.column + kv[0].Length + 1,
+                  last_column = located_token.column + token.Length
               });
         }
       } else {
