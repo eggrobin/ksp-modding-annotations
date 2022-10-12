@@ -44,28 +44,28 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
     ITextSnapshotLine line = subjectTriggerPoint.Value.GetContainingLine();
     SnapshotSpan text_span = line.Extent;
     string searchText = text_span.GetText();
-
-    foreach (string key in phrasebook_.phrases.Keys) {
-      int foundIndex = 0;
-      for (; ; ) {
-        foundIndex = searchText.IndexOf(key, foundIndex);
-        if (foundIndex == -1) {
-          break;
-        }
-        var key_span = currentSnapshot.CreateTrackingSpan(
-            text_span.Start + foundIndex,
-            key.Length,
-            SpanTrackingMode.EdgeInclusive);
-        if (key_span.GetSpan(currentSnapshot).
-            Contains(subjectTriggerPoint.Value)) {
-          phrasebook_.phrases.TryGetValue(key, out var phrase);
-          if (phrase != null)
-            return Task<QuickInfoItem>.Factory.StartNew(
-                () => new QuickInfoItem(key_span, phrase.Info(provider_)));
+    return initialization_.ContinueWith((_) => {
+      foreach (string key in phrasebook_.phrases.Keys) {
+        int foundIndex = 0;
+        for (; ; ) {
+          foundIndex = searchText.IndexOf(key, foundIndex);
+          if (foundIndex == -1) {
+            break;
+          }
+          var key_span = currentSnapshot.CreateTrackingSpan(
+              text_span.Start + foundIndex,
+              key.Length,
+              SpanTrackingMode.EdgeInclusive);
+          if (key_span.GetSpan(currentSnapshot).
+              Contains(subjectTriggerPoint.Value)) {
+            phrasebook_.phrases.TryGetValue(key, out var phrase);
+            if (phrase != null)
+              return new QuickInfoItem(key_span, phrase.Info(provider_));
+          }
         }
       }
-    }
-    return Task.FromResult<QuickInfoItem>(null);
+      return null;
+    });
   }
 
   internal L10NQuickInfoSource(L10NQuickInfoSourceProvider provider,
@@ -74,16 +74,23 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
     subject_buffer_ = buffer;
     phrasebook_ = new Phrasebook();
     Exception err = null;
-    try {
-      foreach (var file in System.IO.Directory.GetFiles(
-                   @"C:\Users\robin\Projects\mockingbirdnest\Principia\ksp_plugin_adapter\localization")) {
-        phrasebook_.AddFile(file);
+    initialization_ = provider.SolutionFileEnumeratorFactory.GetListAsync(
+        includeMiscellaneousProject:false,
+        includeHiddenItems:false,
+        includeExternalItems:false).ContinueWith((files) => {
+      try {
+        foreach (var file in files.Result) {
+          if (file.FullPath.EndsWith(".cfg")) {
+            phrasebook_.AddFile(file.FullPath);
+          }
+        }
+      } catch (Exception e) {
+        err = e;
       }
-    } catch (Exception e) {
-      err = e;
-    }
+    });
   }
 
+  private Task initialization_;
   private L10NQuickInfoSourceProvider provider_;
   private ITextBuffer subject_buffer_;
   private Phrasebook phrasebook_;

@@ -19,6 +19,7 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TextManager.Interop;
 using System.Runtime.InteropServices;
+using Microsoft.VisualStudio.Shell.Internal.FileEnumerationService;
 
 namespace 注 {
 
@@ -40,6 +41,9 @@ internal class L10NQuickInfoSourceProvider : IAsyncQuickInfoSourceProvider {
 
   [Import(typeof(SVsServiceProvider))]
   internal IServiceProvider ServiceProvider { get; set; }
+
+  [Import]
+  internal ISolutionFileEnumeratorFactory SolutionFileEnumeratorFactory { get; set; }
 }
 
 internal class L10NQuickInfoController : IIntellisenseController {
