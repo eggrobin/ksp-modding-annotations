@@ -122,7 +122,6 @@ internal class Phrasebook {
     watcher_.Changed += (sender, e) => {
         AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
     };
-    watcher_.EnableRaisingEvents = true;
   }
 
   public void AddFile(string path) {
@@ -137,6 +136,7 @@ internal class Phrasebook {
         deepest_common_ancestor_ = deepest_common_ancestor_.Parent;
       }
       watcher_.Path = deepest_common_ancestor_.FullName;
+      watcher_.EnableRaisingEvents = true;
 
       AddLocalizationKeys(LexNodes(StreamLines(path)), path);
     }

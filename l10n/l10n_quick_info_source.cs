@@ -44,7 +44,7 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
     ITextSnapshotLine line = subjectTriggerPoint.Value.GetContainingLine();
     SnapshotSpan text_span = line.Extent;
     string searchText = text_span.GetText();
-    return new Task<QuickInfoItem>(() => {
+    return initialization_.ContinueWith((_) => {
       foreach (string key in phrasebook_.phrases.Keys) {
         int foundIndex = 0;
         for (;;) {
