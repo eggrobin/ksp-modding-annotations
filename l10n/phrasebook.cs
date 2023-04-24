@@ -116,14 +116,6 @@ internal class Phrasebook {
   public static string[] KSPLanguages =
       new[] { "en-us", "fr-fr", "ru", "zh-cn" };
 
-  public Phrasebook() {
-    watcher_.NotifyFilter = NotifyFilters.LastWrite;
-    watcher_.Filter = "*.cfg";
-    watcher_.Changed += (sender, e) => {
-        AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
-    };
-  }
-
   public void AddFile(string path) {
     if (!files.Contains(path)) {
       files.Add(path);
@@ -136,6 +128,20 @@ internal class Phrasebook {
         deepest_common_ancestor_ = deepest_common_ancestor_.Parent;
       }
       watcher_.Path = deepest_common_ancestor_.FullName;
+
+      watcher_.NotifyFilter = NotifyFilters.Attributes
+                            | NotifyFilters.CreationTime
+                            | NotifyFilters.DirectoryName
+                            | NotifyFilters.FileName
+                            | NotifyFilters.LastAccess
+                            | NotifyFilters.LastWrite
+                            | NotifyFilters.Security
+                            | NotifyFilters.Size;
+      watcher_.Changed += (sender, e) => {
+          AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
+      };
+      watcher_.Filter = "*.cfg";
+      watcher_.IncludeSubdirectories = true;
       watcher_.EnableRaisingEvents = true;
 
       AddLocalizationKeys(LexNodes(StreamLines(path)), path);
