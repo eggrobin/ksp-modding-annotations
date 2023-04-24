@@ -44,10 +44,10 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
     ITextSnapshotLine line = subjectTriggerPoint.Value.GetContainingLine();
     SnapshotSpan text_span = line.Extent;
     string searchText = text_span.GetText();
-    return initialization_.ContinueWith((_) => {
+    return new Task<QuickInfoItem>(() => {
       foreach (string key in phrasebook_.phrases.Keys) {
         int foundIndex = 0;
-        for (; ; ) {
+        for (;;) {
           foundIndex = searchText.IndexOf(key, foundIndex);
           if (foundIndex == -1) {
             break;
@@ -72,7 +72,6 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
                                ITextBuffer buffer) {
     provider_ = provider;
     subject_buffer_ = buffer;
-    phrasebook_ = new Phrasebook();
     Exception err = null;
     initialization_ = provider.SolutionFileEnumeratorFactory.GetListAsync(
         includeMiscellaneousProject:false,
@@ -93,7 +92,7 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
   private Task initialization_;
   private L10NQuickInfoSourceProvider provider_;
   private ITextBuffer subject_buffer_;
-  private Phrasebook phrasebook_;
+  private static Phrasebook phrasebook_ = new Phrasebook();
   private bool is_disposed_;
   private bool debug_ = false;
 }

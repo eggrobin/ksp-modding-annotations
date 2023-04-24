@@ -6,6 +6,7 @@ using Microsoft.VisualStudio.Text.Adornments;
 using Microsoft.VisualStudio.TextManager.Interop;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -115,8 +116,30 @@ internal class Phrasebook {
   public static string[] KSPLanguages =
       new[] { "en-us", "fr-fr", "ru", "zh-cn" };
 
+  public Phrasebook() {
+    watcher_.NotifyFilter = NotifyFilters.LastWrite;
+    watcher_.Filter = "*.cfg";
+    watcher_.Changed += (sender, e) => {
+        AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
+    };
+    watcher_.EnableRaisingEvents = true;
+  }
+
   public void AddFile(string path) {
-    AddLocalizationKeys(LexNodes(StreamLines(path)), path);
+    if (!files.Contains(path)) {
+      files.Add(path);
+      DirectoryInfo directory = Directory.GetParent(path);
+      if (deepest_common_ancestor_ == null) {
+        deepest_common_ancestor_ = directory;
+      }
+      while (!new Uri(deepest_common_ancestor_.FullName).IsBaseOf(
+                new Uri(directory.FullName))) {
+        deepest_common_ancestor_ = deepest_common_ancestor_.Parent;
+      }
+      watcher_.Path = deepest_common_ancestor_.FullName;
+
+      AddLocalizationKeys(LexNodes(StreamLines(path)), path);
+    }
   }
 
   private IEnumerable<string> StreamLines(string path) {
@@ -149,6 +172,10 @@ internal class Phrasebook {
 
   private void AddLocalizationKeys(IEnumerable<LocatedToken> parsed_nodes,
                                    string file) {
+    foreach (var key_phrase in phrases) {
+      Phrase phrase = key_phrase.Value;
+      phrase.versions.RemoveAll(version => version.location.file == file);
+    }
     string name = "";
     var node_stack = new List<string>();
     foreach (var located_token in parsed_nodes) {
@@ -275,6 +302,9 @@ internal class Phrasebook {
 
   public readonly Dictionary<string, Phrase> phrases =
       new Dictionary<string, Phrase>();
+  public readonly HashSet<string> files = new HashSet<string>();
+  DirectoryInfo deepest_common_ancestor_ = null;
+  private FileSystemWatcher watcher_ = new FileSystemWatcher();
 }
 
 }
