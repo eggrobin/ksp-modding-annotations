@@ -25,6 +25,7 @@ namespace 注 {
 internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
   public void Dispose() {
     if (!is_disposed_) {
+      --instance_count_;
       GC.SuppressFinalize(this);
       is_disposed_ = true;
     }
@@ -45,22 +46,24 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
     SnapshotSpan text_span = line.Extent;
     string searchText = text_span.GetText();
     return initialization_.ContinueWith((_) => {
-      foreach (string key in phrasebook_.phrases.Keys) {
-        int foundIndex = 0;
-        for (;;) {
-          foundIndex = searchText.IndexOf(key, foundIndex);
-          if (foundIndex == -1) {
-            break;
-          }
-          var key_span = currentSnapshot.CreateTrackingSpan(
-              text_span.Start + foundIndex,
-              key.Length,
-              SpanTrackingMode.EdgeInclusive);
-          if (key_span.GetSpan(currentSnapshot).
-              Contains(subjectTriggerPoint.Value)) {
-            phrasebook_.phrases.TryGetValue(key, out var phrase);
-            if (phrase != null)
-              return new QuickInfoItem(key_span, phrase.Info(provider_));
+      lock (phrasebook_.phrases) {
+        foreach (string key in phrasebook_.phrases.Keys) {
+          for (int foundIndex = 0; foundIndex < key.Length; foundIndex += key.Length) {
+            foundIndex = searchText.IndexOf(key, foundIndex);
+            if (foundIndex == -1) {
+              break;
+            }
+            var key_span = currentSnapshot.CreateTrackingSpan(
+                text_span.Start + foundIndex,
+                key.Length,
+                SpanTrackingMode.EdgeInclusive);
+            if (key_span.GetSpan(currentSnapshot).
+                Contains(subjectTriggerPoint.Value)) {
+              phrasebook_.phrases.TryGetValue(key, out var phrase);
+              if (phrase != null) {
+                return new QuickInfoItem(key_span, phrase.Info(provider_, $"{instance_count_} instances"));
+              }
+            }
           }
         }
       }
@@ -70,6 +73,7 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
 
   internal L10NQuickInfoSource(L10NQuickInfoSourceProvider provider,
                                ITextBuffer buffer) {
+    ++instance_count_;
     provider_ = provider;
     subject_buffer_ = buffer;
     Exception err = null;
@@ -93,8 +97,8 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
   private L10NQuickInfoSourceProvider provider_;
   private ITextBuffer subject_buffer_;
   private static Phrasebook phrasebook_ = new Phrasebook();
+  private static int instance_count_ = 0;
   private bool is_disposed_;
-  private bool debug_ = false;
 }
 
 }

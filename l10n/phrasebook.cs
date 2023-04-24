@@ -19,6 +19,7 @@ internal class SourceLocation {
   public int line;
   public int first_column;
   public int last_column;
+  public DateTime last_updated;
 }
 
 internal class Version {
@@ -98,16 +99,21 @@ internal class Version {
 internal class Phrase {
   public List<Version> versions { get; } = new List<Version>();
 
-  public ContainerElement Info(L10NQuickInfoSourceProvider provider) {
+  public ContainerElement Info(L10NQuickInfoSourceProvider provider, string debug) {
     return new ContainerElement(ContainerElementStyle.Stacked,
-                                InfoLines(provider));
+                                InfoLines(provider, debug));
   }
 
   private IEnumerable<ClassifiedTextElement> InfoLines(
-      L10NQuickInfoSourceProvider provider) {
+      L10NQuickInfoSourceProvider provider, string debug) {
     foreach (var version in versions) {
       yield return new ClassifiedTextElement(
-          version.Prefix(provider).Concat(version.runs));
+          version.Prefix(provider).Concat(version.runs).Append(
+              new ClassifiedTextRun(PredefinedClassificationTypeNames.ExcludedCode,
+                                    version.location.last_updated.ToString("HH:mm:ss"))));
+    }
+    if (debug != null) {
+      yield return new ClassifiedTextElement(new ClassifiedTextRun(PredefinedClassificationTypeNames.Text, debug));
     }
   }
 }
@@ -117,8 +123,8 @@ internal class Phrasebook {
       new[] { "en-us", "fr-fr", "ru", "zh-cn" };
 
   public void AddFile(string path) {
-    if (!files.Contains(path)) {
-      files.Add(path);
+    if (!files_.Contains(path)) {
+      files_.Add(path);
       DirectoryInfo directory = Directory.GetParent(path);
       if (deepest_common_ancestor_ == null) {
         deepest_common_ancestor_ = directory;
@@ -127,31 +133,62 @@ internal class Phrasebook {
                 new Uri(directory.FullName))) {
         deepest_common_ancestor_ = deepest_common_ancestor_.Parent;
       }
-      watcher_.Path = deepest_common_ancestor_.FullName;
-
-      watcher_.NotifyFilter = NotifyFilters.Attributes
-                            | NotifyFilters.CreationTime
-                            | NotifyFilters.DirectoryName
-                            | NotifyFilters.FileName
-                            | NotifyFilters.LastAccess
-                            | NotifyFilters.LastWrite
-                            | NotifyFilters.Security
-                            | NotifyFilters.Size;
-      watcher_.Changed += (sender, e) => {
-          AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
-      };
-      watcher_.Filter = "*.cfg";
-      watcher_.IncludeSubdirectories = true;
-      watcher_.EnableRaisingEvents = true;
+      if (watcher_ == null) {
+        watcher_ = new FileSystemWatcher(deepest_common_ancestor_.FullName);
+        watcher_.Renamed += RefreshRenamedFile;
+        watcher_.Created += RefreshFile;
+        watcher_.Changed += RefreshFile;
+        watcher_.Filter = "*.cfg";
+        watcher_.IncludeSubdirectories = true;
+        watcher_.EnableRaisingEvents = true;
+      } else {
+        watcher_.Path = deepest_common_ancestor_.FullName;
+      }
 
       AddLocalizationKeys(LexNodes(StreamLines(path)), path);
     }
   }
 
+  private void RefreshRenamedFile(object sender, FileSystemEventArgs e) {
+    lock (phrases) {
+      if (!files_.Contains(e.FullPath)) {
+        return;
+      }
+      foreach (var key_phrase in phrases) {
+          Phrase phrase = key_phrase.Value;
+          phrase.versions.RemoveAll(version => version.location.file == e.FullPath);
+      }
+    retry:
+      try {
+        AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
+      } catch (System.IO.IOException) {
+        System.Threading.Thread.Sleep(1000);
+        goto retry;
+      }
+    }
+  }
+
+  private void RefreshFile(object sender, FileSystemEventArgs e) {
+    lock (phrases) {
+      foreach (var key_phrase in phrases) {
+          Phrase phrase = key_phrase.Value;
+          phrase.versions.RemoveAll(version => version.location.file == e.FullPath);
+      }
+    retry:
+      try {
+        AddLocalizationKeys(LexNodes(StreamLines(e.FullPath)), e.FullPath);
+      } catch (System.IO.IOException) {
+        System.Threading.Thread.Sleep(1000);
+        goto retry;
+      }
+    }
+  }
+
   private IEnumerable<string> StreamLines(string path) {
-    var stream = new System.IO.StreamReader(System.IO.File.OpenRead(path));
-    while (stream.ReadLine() is String line) {
-      yield return line;
+    using (var stream = new System.IO.StreamReader(path)) {
+      while (stream.ReadLine() is string line) {
+        yield return line;
+      }
     }
   }
 
@@ -178,10 +215,6 @@ internal class Phrasebook {
 
   private void AddLocalizationKeys(IEnumerable<LocatedToken> parsed_nodes,
                                    string file) {
-    foreach (var key_phrase in phrases) {
-      Phrase phrase = key_phrase.Value;
-      phrase.versions.RemoveAll(version => version.location.file == file);
-    }
     string name = "";
     var node_stack = new List<string>();
     foreach (var located_token in parsed_nodes) {
@@ -210,7 +243,8 @@ internal class Phrasebook {
               new SourceLocation{
                   file = file, line = located_token.line,
                   first_column = located_token.column + kv[0].Length + 1,
-                  last_column = located_token.column + token.Length
+                  last_column = located_token.column + token.Length,
+                  last_updated = DateTime.Now,
               });
         }
       } else {
@@ -308,9 +342,9 @@ internal class Phrasebook {
 
   public readonly Dictionary<string, Phrase> phrases =
       new Dictionary<string, Phrase>();
-  public readonly HashSet<string> files = new HashSet<string>();
+  public readonly HashSet<string> files_ = new HashSet<string>();
   DirectoryInfo deepest_common_ancestor_ = null;
-  private FileSystemWatcher watcher_ = new FileSystemWatcher();
+  private FileSystemWatcher watcher_ = null;
 }
 
 }
