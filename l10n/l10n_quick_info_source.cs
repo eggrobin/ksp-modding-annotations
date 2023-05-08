@@ -61,7 +61,11 @@ internal class L10NQuickInfoSource : IAsyncQuickInfoSource {
                 Contains(subjectTriggerPoint.Value)) {
               phrasebook_.phrases.TryGetValue(key, out var phrase);
               if (phrase != null) {
-                return new QuickInfoItem(key_span, phrase.Info(provider_, $"{instance_count_} instances"));
+                return new QuickInfoItem(key_span, phrase.Info(provider_ 
+                #if DEBUG
+                , $"{instance_count_} instances"
+                #endif
+                ));
               }
             }
           }

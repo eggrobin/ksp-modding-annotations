@@ -99,7 +99,7 @@ internal class Version {
 internal class Phrase {
   public List<Version> versions { get; } = new List<Version>();
 
-  public ContainerElement Info(L10NQuickInfoSourceProvider provider, string debug) {
+  public ContainerElement Info(L10NQuickInfoSourceProvider provider, string debug = null) {
     return new ContainerElement(ContainerElementStyle.Stacked,
                                 InfoLines(provider, debug));
   }
@@ -108,9 +108,13 @@ internal class Phrase {
       L10NQuickInfoSourceProvider provider, string debug) {
     foreach (var version in versions) {
       yield return new ClassifiedTextElement(
-          version.Prefix(provider).Concat(version.runs).Append(
+          version.Prefix(provider).Concat(version.runs)
+          #if DEBUG
+              .Append(
               new ClassifiedTextRun(PredefinedClassificationTypeNames.ExcludedCode,
-                                    version.location.last_updated.ToString("HH:mm:ss"))));
+                                    version.location.last_updated.ToString("HH:mm:ss")))
+          #endif
+          );
     }
     if (debug != null) {
       yield return new ClassifiedTextElement(new ClassifiedTextRun(PredefinedClassificationTypeNames.Text, debug));
